@@ -2,10 +2,8 @@
   "name": "relay-server",
   "version": "1.0.0",
   "main": "index.js",
-  
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
-    
     "build": "tsc",
     "start": "node dist/index.js"
   },
@@ -14,17 +12,23 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@fastify/formbody": "^8.0.2",
     "@fastify/websocket": "^11.0.2",
     "@types/node": "^22.15.21",
+    "@types/ws": "^8.18.1",
     "convex": "^1.24.1",
     "dotenv": "^16.5.0",
     "elevenlabs": "^1.59.0",
     "fastify": "^5.3.3",
     "ts-node-dev": "^2.0.0",
     "twilio": "^5.6.1",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "ws": "^8.16.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }
