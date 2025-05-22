@@ -10,6 +10,7 @@ app.register(websocket);
 
 // Health check route
 app.get('/health', async (request, reply) => {
+  reply.code(200);
   return { status: 'ok' };
 });
 
@@ -29,5 +30,5 @@ app.listen({ port: Number(PORT), host: '0.0.0.0' }, err => {
     console.error(err);
     process.exit(1);
   }
-  console.log(`Relay server listening on port ${PORT}`);
+  console.log(`Relay server listening on http://localhost:${PORT}`);
 }); 
