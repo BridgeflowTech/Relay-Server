@@ -1,0 +1,91 @@
+# Relay Server Rules (TypeScript + Fastify)
+
+## 1. Provider Abstraction
+- Implement a provider interface/strategy for each telephony (e.g., Twilio, Vapi) and TTS (e.g., ElevenLabs) integration.
+- Each provider handler must expose standardized methods:
+  - `initiateCall`
+  - `streamAudio`
+  - `endCall`
+  - `getStatus`
+- Add new providers by implementing the interface and registering them in a provider registry.
+
+**Example:**
+```typescript
+interface TelephonyProvider {
+  initiateCall(params: CallParams): Promise<CallSession>;
+  endCall(sessionId: string): Promise<void>;
+  getStatus(sessionId: string): Promise<CallStatus>;
+}
+
+interface TTSProvider {
+  streamAudio(text: string, options: TTSOptions): AsyncIterable<AudioChunk>;
+}
+```
+
+## 2. Job Handling
+- Accept job payloads with the following structure:
+```json
+{
+  "provider": "string",
+  "caller": "string",
+  "to": "string",
+  "from": "string",
+  "prompt": "string",
+  "additionalData": { "key": "value" }
+}
+```
+- Validate all incoming job payloads for required fields and correct types.
+- Assign a unique job/session ID to each job.
+
+## 3. Session Management & Isolation
+- Each job/session must be handled in isolation (separate context/object).
+- Never mix audio/data between sessions.
+- Track session state (active, completed, failed) in memory and/or persistent store.
+
+## 4. WebSocket & Streaming (Fastify)
+- Use persistent WebSocket connections for real-time audio streaming between providers.
+- Handle connection errors, reconnections, and timeouts gracefully.
+- Buffer and forward audio data efficiently; avoid unnecessary latency.
+
+**Example (Fastify WebSocket):**
+```typescript
+import fastify from 'fastify';
+import websocket from '@fastify/websocket';
+
+const app = fastify();
+app.register(websocket);
+
+app.get('/stream', { websocket: true }, (connection, req) => {
+  connection.socket.on('message', message => {
+    // Handle incoming audio chunk
+  });
+});
+```
+
+## 5. Convex Integration
+- On job start, update Convex with job status (`started`).
+- On job completion or failure, update Convex with final status and any logs or results.
+- Use Convex for metadata, logs, and user/job state—not for streaming audio.
+
+## 6. Security
+- Authenticate all incoming requests (e.g., API keys, JWT, or OAuth).
+- Validate user permissions for each job.
+- Never expose provider credentials in logs or responses.
+
+## 7. Scalability
+- Design the relay server to handle multiple concurrent sessions (multi-user, multi-job).
+- Use async/non-blocking I/O for all network operations.
+- Support horizontal scaling (stateless design, externalize session state if needed).
+
+## 8. Error Handling & Logging
+- Log all job events, errors, and provider responses with timestamps and job IDs.
+- Gracefully handle provider failures and notify Convex/UI of errors.
+- Provide clear error messages for debugging and user feedback.
+
+## 9. Extensibility
+- New providers or job types should be addable with minimal changes to core logic.
+- Use configuration files or environment variables for provider credentials and settings.
+
+## 10. Testing
+- Implement unit and integration tests for each provider handler and job flow.
+- Mock provider APIs for testing streaming and job orchestration logic. 
