@@ -30,7 +30,7 @@ async function getSignedUrl(configurations: any) {
         {
           method: 'GET',
           headers: {
-            'xi-api-key': "sk_d396a9499b3c5422ff1acca1bec8641643cbd2761e26f359",
+            'xi-api-key': configurations.apiKey || '',
           },
         }
       );
