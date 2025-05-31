@@ -4,8 +4,11 @@ import dotenv from 'dotenv';
 import fastifyFormBody from '@fastify/formbody';
 import fastifyWs from '@fastify/websocket';
 import { Twilio } from 'twilio';
-import { config } from './config/config';
+import { config } from './config';
 import  WebSocket  from 'ws';
+import { integrations } from "./integrations";
+import { convexQuery } from "./convex";
+
 
 // Load environment variables
 dotenv.config();
@@ -20,14 +23,14 @@ const PORT = process.env.PORT || 3001;
 
 const twilioClient = new Twilio(config.twilio.accountSid, config.twilio.authToken);
 
-async function getSignedUrl() {
+async function getSignedUrl(configurations: any) {
     try {
       const response = await fetch(
-        `https://api.elevenlabs.io/v1/convai/conversation/get_signed_url?agent_id=${config.elevenlabs.agentId}`,
+        `https://api.elevenlabs.io/v1/convai/conversation/get_signed_url?agent_id=${configurations.agentId}`,
         {
           method: 'GET',
           headers: {
-            'xi-api-key': config.elevenlabs.apiKey || '',
+            'xi-api-key': "sk_d396a9499b3c5422ff1acca1bec8641643cbd2761e26f359",
           },
         }
       );
@@ -42,15 +45,19 @@ async function getSignedUrl() {
       console.error('Error getting signed URL:', error);
       throw error;
     }
-  }
+}
+
 
 app.post('/outbound-call', async (request, reply) => {
-    const { number, prompt, first_message } = request.body as { 
+    const { number, prompt, first_message, nodeId } = request.body as { 
       number: string;
       prompt?: string;
       first_message?: string;
+      nodeId?: string;
+      providerNodeId?: string;
     };
-  
+    
+
     if (!number) {
       return reply.code(400).send({ error: 'Phone number is required' });
     }
@@ -61,7 +68,7 @@ app.post('/outbound-call', async (request, reply) => {
         to: number,
         url: `https://${request.headers.host}/outbound-call-twiml?prompt=${encodeURIComponent(
           prompt || ''
-        )}&first_message=${encodeURIComponent(first_message || '')}`,
+        )}&first_message=${encodeURIComponent(first_message || '')}&nodeId=${nodeId}`,
       });
   
       reply.send({
@@ -81,13 +88,15 @@ app.post('/outbound-call', async (request, reply) => {
 app.all('/outbound-call-twiml', async (request, reply) => {
     const prompt = (request.query as any).prompt || '';
     const first_message = (request.query as any).first_message || '';
-  
+    const nodeId = (request.query as any).nodeId || '';
+
     const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
           <Connect>
           <Stream url="wss://${request.headers.host}/outbound-media-stream">
               <Parameter name="prompt" value="${prompt}" />
               <Parameter name="first_message" value="${first_message}" />
+              <Parameter name="nodeId" value="${nodeId}" />
           </Stream>
           </Connect>
       </Response>`;
@@ -95,16 +104,18 @@ app.all('/outbound-call-twiml', async (request, reply) => {
     reply.type('text/xml').send(twimlResponse);
   });
 
+
 app.register(async (fastifyInstance) => {
     fastifyInstance.get('/outbound-media-stream', { websocket: true }, (connection, req) => {
       const ws = connection;
       console.info('[Server] Twilio connected to outbound media stream');
-  
+      
       // Variables to track the call
       let streamSid: string | null = null;
       let callSid: string | null = null;
       let elevenLabsWs: WebSocket | null = null;
       let customParameters: any = null;
+      let signedUrl: string | null = null;
   
       // Handle WebSocket errors
       ws.on('error', console.error);
@@ -112,9 +123,12 @@ app.register(async (fastifyInstance) => {
       // Set up ElevenLabs connection
       const setupElevenLabs = async () => {
         try {
-          const signedUrl = await getSignedUrl();
+         
+          const configurations = await convexQuery("flows/node/data:getNodeConfigurations", { nodeId: customParameters?.nodeId });
+          const signedUrl = await getSignedUrl(configurations.value.configurations);
+          
           elevenLabsWs = new WebSocket(signedUrl);
-  
+          
           elevenLabsWs.on('open', () => {
             console.log('[ElevenLabs] Connected to Conversational AI');
   
@@ -237,7 +251,7 @@ app.register(async (fastifyInstance) => {
       };
   
       // Set up ElevenLabs connection
-      setupElevenLabs();
+      
   
       // Handle messages from Twilio
       ws.on('message', (message) => {
@@ -254,6 +268,7 @@ app.register(async (fastifyInstance) => {
               customParameters = msg.start.customParameters;
               console.log(`[Twilio] Stream started - StreamSid: ${streamSid}, CallSid: ${callSid}`);
               console.log('[Twilio] Start parameters:', customParameters);
+              setupElevenLabs();
               break;
   
             case 'media':
@@ -290,6 +305,10 @@ app.register(async (fastifyInstance) => {
     });
   });
 
+
+
+
+
 // Health check route
 app.get('/health', async (request, reply) => {
   reply.code(200);
@@ -306,6 +325,39 @@ app.get('/health', async (request, reply) => {
 //   });
 // });
 
+// Global error handler
+app.setErrorHandler((error, request, reply) => {
+  console.error('[Error Handler]', {
+    error: error.message,
+    stack: error.stack,
+    path: request.url,
+    method: request.method,
+    params: request.params,
+    query: request.query,
+    body: request.body,
+  });
+
+  reply.status(500).send({
+    error: 'Internal Server Error',
+    message: error.message,
+  });
+});
+
+app.post('/integrate', async (request, reply) => {
+  const { source, provider, ...rest } = request.body as { source: string; provider: string; [key: string]: any };
+  if (!source || !provider) {
+    return reply.code(400).send({ error: 'Missing source or provider' });
+  }
+  // Fetch config from Convex for this source/provider node
+  const config = await convexQuery("flows/node/data:getNodeConfigurations", { nodeId: source });
+  // Route to the correct integration
+  const integration = integrations[provider];
+  if (!integration) {
+    return reply.code(400).send({ error: "Unknown provider" });
+  }
+  const result = await integration.initiateCall({ ...rest, config });
+  reply.send(result);
+});
 
 app.listen({ port: Number(PORT), host: '0.0.0.0' }, err => {
   if (err) {
