@@ -54,13 +54,15 @@ app.post('/outbound-call', async (request, reply) => {
       prompt?: string;
       first_message?: string;
       nodeId?: string;
-      providerNodeId?: string;
+      //providerNodeId?: string;
     };
     
 
     if (!number) {
       return reply.code(400).send({ error: 'Phone number is required' });
     }
+
+    
   
     try {
       const call = await twilioClient.calls.create({
