@@ -31,8 +31,8 @@ async function convexQuery(functionPath: string, args: any) {
             "Content-Type": "application/json",
             "Authorization": `Convex ${config.convex.token}`
         }
-    });
-    const data = response.data;
+    }).catch((err)=>console.log(err));
+    const data = response?.data;
     
     return data;
 }
