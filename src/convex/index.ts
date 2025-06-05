@@ -21,12 +21,12 @@ async function convexMutation(functionName: string, args: any, nodeId: string) {
 
 async function convexQuery(functionPath: string, args: any) {
     const body = {
-        path: functionPath,
+        //path: functionPath,
         args: {"nodeId": args.nodeId},
         format:"json"
     }
     console.log(body)
-    const response = await axios.post(`${config.convex.url}/api/query`, body, {
+    const response = await axios.post(`https://dashing-duck-833.convex.cloud/api/run/flows/node/data/getNodeConfigurations`, body, {
         headers: {
             "Content-Type": "application/json",
             "Authorization": `Convex ${config.convex.token}`
