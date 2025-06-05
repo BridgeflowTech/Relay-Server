@@ -29,7 +29,7 @@ async function convexQuery(functionPath: string, args: any) {
     const response = await axios.post(`https://dashing-duck-833.convex.cloud/api/run/flows/node/data/getNodeConfigurations`, body, {
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `Convex ${config.convex.token}`
+           // "Authorization": `Convex ${config.convex.token}`
         }
     }).catch((err)=>console.log(err));
     const data = response?.data;
