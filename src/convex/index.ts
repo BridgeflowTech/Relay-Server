@@ -28,7 +28,8 @@ async function convexQuery(functionPath: string, args: any) {
     console.log(body)
     const response = await axios.post(`${config.convex.url}/api/query`, body, {
         headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Authorization": `Convex ${config.convex.token}`
         }
     });
     const data = response.data;

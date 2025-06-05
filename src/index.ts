@@ -23,6 +23,7 @@ const PORT = process.env.PORT || 3001;
 
 const twilioClient = new Twilio(config.twilio.accountSid, config.twilio.authToken);
 
+
 async function getSignedUrl(configurations: any) {
     try {
       const response = await fetch(
@@ -46,6 +47,14 @@ async function getSignedUrl(configurations: any) {
       throw error;
     }
 }
+
+app.post('/try-convex', async (request, reply) => {
+  const data = request.body as {nodeId:string};
+  
+  const configurations = await convexQuery("flows/node/data:getNodeConfigurations", { nodeId: data.nodeId });
+  console.log(configurations);
+  reply.send(configurations);
+});
 
 
 app.post('/outbound-call', async (request, reply) => {
