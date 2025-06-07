@@ -24,29 +24,7 @@ const PORT = process.env.PORT || 3001;
 const twilioClient = new Twilio(config.twilio.accountSid, config.twilio.authToken);
 
 
-async function getSignedUrl(configurations: any) {
-    try {
-      const response = await fetch(
-        `https://api.elevenlabs.io/v1/convai/conversation/get_signed_url?agent_id=${configurations.agentId}`,
-        {
-          method: 'GET',
-          headers: {
-            'xi-api-key': configurations.apiKey || '',
-          },
-        }
-      );
-  
-      if (!response.ok) {
-        throw new Error(`Failed to get signed URL: ${response.statusText}`);
-      }
-  
-      const data = await response.json() as { signed_url: string };
-      return data.signed_url;
-    } catch (error) {
-      console.error('Error getting signed URL:', error);
-      throw error;
-    }
-}
+
 
 app.post('/try-convex', async (request, reply) => {
   const data = request.body as {nodeId:string};
@@ -58,13 +36,15 @@ app.post('/try-convex', async (request, reply) => {
 
 
 app.post('/outbound-call', async (request, reply) => {
-    const { number, prompt, first_message, nodeId } = request.body as { 
+    const { number, prompt, first_message, nodeId, signedUrl } = request.body as { 
       number: string;
       prompt?: string;
       first_message?: string;
       nodeId?: string;
-      //providerNodeId?: string;
+      signedUrl?: string;
+      
     };
+    
     
 
     if (!number) {
@@ -79,7 +59,7 @@ app.post('/outbound-call', async (request, reply) => {
         to: number,
         url: `https://${request.headers.host}/outbound-call-twiml?prompt=${encodeURIComponent(
           prompt || ''
-        )}&first_message=${encodeURIComponent(first_message || '')}&nodeId=${nodeId}`,
+        )}&first_message=${encodeURIComponent(first_message || '')}&nodeId=${nodeId}&signedUrl=${signedUrl}`,
       });
   
       reply.send({
@@ -100,7 +80,7 @@ app.all('/outbound-call-twiml', async (request, reply) => {
     const prompt = (request.query as any).prompt || '';
     const first_message = (request.query as any).first_message || '';
     const nodeId = (request.query as any).nodeId || '';
-
+    const signedUrl = (request.query as any).signedUrl || '';
     const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
           <Connect>
@@ -108,6 +88,7 @@ app.all('/outbound-call-twiml', async (request, reply) => {
               <Parameter name="prompt" value="${prompt}" />
               <Parameter name="first_message" value="${first_message}" />
               <Parameter name="nodeId" value="${nodeId}" />
+              <Parameter name="signedUrl" value="${signedUrl}" />
           </Stream>
           </Connect>
       </Response>`;
@@ -134,10 +115,9 @@ app.register(async (fastifyInstance) => {
       // Set up ElevenLabs connection
       const setupElevenLabs = async () => {
         try {
+          const signedUrl = customParameters?.signedUrl;
          
-          const configurations = await convexQuery("flows/node/data:getNodeConfigurations", { nodeId: customParameters?.nodeId });
-          const signedUrl = await getSignedUrl(configurations.value.configurations);
-          
+          console.log(signedUrl);
           elevenLabsWs = new WebSocket(signedUrl);
           
           elevenLabsWs.on('open', () => {
@@ -276,7 +256,7 @@ app.register(async (fastifyInstance) => {
             case 'start':
               streamSid = msg.start.streamSid;
               callSid = msg.start.callSid;
-              customParameters = msg.start.customParameters;
+              customParameters = msg.start.customParameters;              
               console.log(`[Twilio] Stream started - StreamSid: ${streamSid}, CallSid: ${callSid}`);
               console.log('[Twilio] Start parameters:', customParameters);
               setupElevenLabs();
